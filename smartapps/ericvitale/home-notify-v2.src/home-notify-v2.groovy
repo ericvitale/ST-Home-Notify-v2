@@ -1,6 +1,8 @@
 /**
  *  Home Notify v2
  *
+ *  Version 2.0.1 - 07/30/16
+ *    Feature: Exit delay for contact sensors.
  *  Version 2.0.0 - 07/29/16
  *   -- Initial Build
  *
@@ -63,6 +65,14 @@ def childStartPage() {
 	        //input "arrivalModes", "mode", title: "Modes?", multiple: true, required: false, description: "Select the  modes that you want this app to ignore ."
             input "presence", "capability.presenceSensor", title: "presence", required: false, multiple: true
             input "arrivalWindow", "number", title: "Arrival Window (mins)", required: false, defaultValue: 5, range: "0..*", description: "Number of minutes to ignore an arrival."
+        }
+        
+        section("Exit Delay") {
+            input description: "An exit delay will allow you to leave your home and give you a chance to run a routine that will dismiss the exit notifications before they are sent."
+			input "useExitDelay", "bool", title: "Use Exit Delay?", required: true, defaultValue: false, description: "Chance to acknowledge an exit before notifications?"
+            input "exitDelay", "number", title: "Exit Delay (mins)", required: false, defaultValue: 1, range: "0..*", description: "Number of minutes wait before notifications."
+            input "routine", "text", title: "Select a Routine", multiple: false, required: false
+            input "delayContacts", "capability.contactSensor", title: "Which Contact Sensors?", required: false, multiple: true
         }
         
         section("Contact Sensor Subscriptions") {
@@ -314,7 +324,45 @@ def initChild() {
     	log("Not using arrival window.", "INFO")
     }
     
+    if(useExitDelay) {
+    	def exitDelayContacts = ""
+        
+        delayContacts.each { it->
+        	if(exitDelayContacts != "") {
+            	exitDelayContacts += ", "
+            }
+            exitDelayContacts += it.label
+        }
+        
+        log("Using an exit delay of ${exitDelay}, dismissed by routine: ${rountine}.", "INFO")
+        subscribe(location, "routineExecuted", routineHandler)
+    }
+    
     log("End child initialization().", "DEBUG")
+}
+
+def delayedNotifications() {
+	log("Running delayed notification.", "DEBUG")
+    if(state.notificationCancelled) {
+    	state.notificationCancelled = false
+    } else {
+		doNotifications()
+    }
+}
+
+def doNotifications() {
+    if (!isDuplicateCommand(state.lastEvent, ignoreFrequentEventsDuration)) {
+        state.lastEvent = new Date().time    
+	    playMusicTrack(musicTrack)
+    	playAlarmTrack(alarmTrack)
+        speak(evt.descriptionText)
+        activateSirens()
+        if(push) {
+        	sendPushNotification(evt.descriptionText)
+        }
+    } else {
+    	log("Frequent Event: Ignoring", "DEBUG")
+    }
 }
 
 def routineHandler(evt) {
@@ -325,9 +373,10 @@ def routineHandler(evt) {
     
     if(routine.toLowerCase() == evt.displayName.toLowerCase()) {
     	log("Routine: ${it} matches input selection, dismissing notification.", "INFO")
-
+		state.notificationCancelled = true
      	return
     }
+    
     log("End routineHandler(evt).", "DEBUG")
 }
 
@@ -343,18 +392,7 @@ def waterSensorHandler(evt) {
     
     log("Event = ${evt.descriptionText}.", "DEBUG")
     
-    if (!isDuplicateCommand(state.lastEvent, ignoreFrequentEventsDuration)) {
-        state.lastEvent = new Date().time    
-	    playMusicTrack(musicTrack)
-    	playAlarmTrack(alarmTrack)
-        speak(evt.descriptionText)
-        activateSirens()
-        if(push) {
-        	sendPushNotification(evt.descriptionText)
-        }
-    } else {
-    	log("Frequent Event: Ignoring", "DEBUG")
-    }
+    doNotifications() 
 }
 
 def presenceHandler(evt) {
@@ -394,18 +432,16 @@ def contactHandler(evt) {
     
     log("Event = ${evt.descriptionText}.", "DEBUG")
     
-    if (!isDuplicateCommand(state.lastEvent, ignoreFrequentEventsDuration)) {
-        state.lastEvent = new Date().time    
-	    playMusicTrack(musicTrack)
-    	playAlarmTrack(alarmTrack)
-        speak(evt.descriptionText)
-        activateSirens()
-        if(push) {
-        	sendPushNotification(evt.descriptionText)
+    if(useExitDelay) {
+    	if(evt.device.label in delayContacts) {
+	    	runIn(exitDelay, delayedNotifications)
+        } else {
+        	doNotifications()
         }
     } else {
-    	log("Frequent Event: Ignoring", "DEBUG")
+    	doNotifications() 
     }
+    
 	log("End contactHandler().", "DEBUG")
 }
 
@@ -419,22 +455,11 @@ def motionHandler(evt) {
         return
     }
     
-    if(state.ignoreArrival && useArrivalWindow) {
-    	log("Within arrival window.", "INFO")
-        return
-    }
-    
     log("Event = ${evt.descriptionText}.", "DEBUG")
-    if (!isDuplicateCommand(state.lastEvent, ignoreFrequentEventsDuration)) {
-        state.lastEvent = new Date().time    
-	    playMusicTrack(musicTrack)
-    	playAlarmTrack(alarmTrack)
-        speak(evt.descriptionText)
-        activateSirens()
-    } else {
-    	log("Frequent Event: Ignoring", "DEBUG")
-    }
-	log("End motionHandler().", "DEBUG")
+    
+    doNotifications() 
+	
+    log("End motionHandler().", "DEBUG")
 }
 
 def playMusicTrack(track) {
