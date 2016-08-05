@@ -1,6 +1,8 @@
 /**
  *  Home Notify v2
  *
+ *  Version 2.1.0 - 08/05/16
+ *     -- Enhancement: Made Home Notify more reliable by making notifications asynchronous. 
  *  Version 2.0.0 - 07/29/16
  *   -- Initial Build
  *
@@ -93,6 +95,7 @@ def childStartPage() {
         section("Alarms") {
         	input "alarms", "capability.alarm", title: "Which?", required: false, multiple: true
             input "alarmTrack", "text", title: "Track to Play?", required: true, defaultValue: "1"
+            input "alarmVolume", "number", title: "Volume", required: true, defaultValue: "10"
         }
         
         section("Sirens") {
@@ -224,76 +227,121 @@ def initChild() {
         log("Initialized out of mode, waiting for mode to change.", "INFO")
         return
     }
-    	
-	contacts.each { it->
-    	log("Selected contact sensor type = ${it.name} and label = ${it.label}.", "INFO")
+    
+    if(contacts == null) {
+    	log("No contact sensors selected.", "INFO")
+        state.contact = false
+    } else {
+    	state.contact = true
+		contacts.each { it->
+    		log("Selected contact sensor type = ${it.name} and label = ${it.label}.", "INFO")
+    	}
+        
+        log("Selected contact sensor events ${contactsEvents}.", "INFO")
+    
+        if("Open" in contactsEvents && "Closed" in contactsEvents) {
+            log("Subscribing to all contact sensor events.", "INFO")
+            subscribe(contacts, "contact", contactHandler)
+        } else if ("Open" in contactsEvents) {
+            log("Subscribing to [Open] contact sensor events.", "INFO")
+            subscribe(contacts, "contact.open", contactHandler)
+        } else if ("Closed" in contactsEvents) {
+            log("Subscribing to [Closed] contact sensor events.", "INFO")
+            subscribe(contacts, "contact.closed", contactHandler)
+        }
     }
     
-    log("Selected contact sensor events ${contactsEvents}.", "INFO")
+    if(motions == null) {
+		log("No motion sensors selected.", "INFO")
+        state.motion = false
+    } else {
+    	state.motion = true
+ 		motions.each { it->
+    		log("Selected motion sensors type = ${it.name} and label = ${it.label}.", "INFO")
+    	}
     
-    if("Open" in contactsEvents && "Closed" in contactsEvents) {
-    	log("Subscribing to all contact sensor events.", "INFO")
-        subscribe(contacts, "contact", contactHandler)
-    } else if ("Open" in contactsEvents) {
-    	log("Subscribing to [Open] contact sensor events.", "INFO")
-        subscribe(contacts, "contact.open", contactHandler)
-    } else if ("Closed" in contactsEvents) {
-    	log("Subscribing to [Closed] contact sensor events.", "INFO")
-        subscribe(contacts, "contact.closed", contactHandler)
+    	log("Selected motion sensor events ${motionsEvents}.", "INFO")
+    
+        if("Active" in motionsEvents && "Inactive" in motionsEvents) {
+            log("Subscribing to all motion sensor events.", "INFO")
+            subscribe(motions, "motion", motionHandler)
+        } else if ("Active" in motionsEvents) {
+            log("Subscribing to [active] motion sensor events.", "INFO")
+            subscribe(motions, "motion.active", motionHandler)
+        } else if ("Inactive" in motionsEvents) {
+            log("Subscribing to [inactive] motion sensor events.", "INFO")
+            subscribe(motions, "motion.inactive", motionHandler)
+        }
+	}
+    
+    if(waterSensors == null) {
+    	log("No water sensors selected.", "INFO")
+        state.water = false
+    } else {
+    	state.water =  true
+        waterSensors.each { it->
+            log("Selected moisture sensors type = ${it.name} and label = ${it.label}.", "INFO")
+        }
+
+        log("Selected moisture sensor events ${waterSensorEvents}.", "INFO")
+
+        if("Wet" in waterSensorEvents && "Dry" in waterSensorEvents) {
+            log("Subscribing to all moisture sensor events.", "INFO")
+            subscribe(waterSensors, "water", waterSensorHandler)
+        } else if ("Wet" in waterSensorEvents) {
+            log("Subscribing to [wet] moisture sensor events.", "INFO")
+            subscribe(waterSensors, "water.wet", waterSensorHandler)
+        } else if ("Dry" in waterSensorEvents) {
+            log("Subscribing to [dry] moisture sensor events.", "INFO")
+            subscribe(waterSensors, "water.dry", waterSensorHandler)
+        }
     }
     
-    motions.each { it->
-    	log("Selected motion sensors type = ${it.name} and label = ${it.label}.", "INFO")
+    if(players == null) {
+    	log("No music players selected.", "INFO")
+        state.music = false
+	} else {
+    	state.music = true
+        state.musicTrack = musicTrack
+        players.each { it->
+            log("Selected music players type = ${it.name} and label = ${it.label} will play ${musicTrack}.", "INFO")
+        }
     }
     
-    log("Selected motion sensor events ${motionsEvents}.", "INFO")
+    if(speech == null) {
+    	log("No speaking devices selected.", "INFO")
+        state.talk = false
+    } else {
+    	state.talk = true
+        speech.each { it->
+            log("Selected speech synthesizers type = ${it.name} and label = ${it.label}.", "INFO")
+        }
     
-    if("Active" in motionsEvents && "Inactive" in motionsEvents) {
-    	log("Subscribing to all motion sensor events.", "INFO")
-        subscribe(motions, "motion", motionHandler)
-    } else if ("Active" in motionsEvents) {
-    	log("Subscribing to [active] motion sensor events.", "INFO")
-        subscribe(motions, "motion.active", motionHandler)
-    } else if ("Inactive" in motionsEvents) {
-    	log("Subscribing to [inactive] motion sensor events.", "INFO")
-        subscribe(motions, "motion.inactive", motionHandler)
+        log("Delay speech setting = ${delaySpeech}.", "INFO")
+        log("Speech delay set to ${speechDelayLength}.", "INFO")
     }
     
-    waterSensors.each { it->
-    	log("Selected moisture sensors type = ${it.name} and label = ${it.label}.", "INFO")
+    if(alarms == null) {
+    	log("No alarms selected.", "INFO")
+        state.alarm = false
+    } else {
+    	state.alarm = true
+        state.alarmTrack = alarmTrack
+        state.alarmVolume = alarmVolume
+        alarms.each { it->
+            log("Selected alarms type = ${it.name} and label = ${it.label} will play ${state.alarmTrack} @ ${state.alarmVolume}.", "INFO")
+        }
     }
-    
-    log("Selected moisture sensor events ${waterSensorEvents}.", "INFO")
-    
-    if("Wet" in waterSensorEvents && "Dry" in waterSensorEvents) {
-    	log("Subscribing to all moisture sensor events.", "INFO")
-        subscribe(waterSensors, "water", waterSensorHandler)
-    } else if ("Wet" in waterSensorEvents) {
-    	log("Subscribing to [wet] moisture sensor events.", "INFO")
-        subscribe(waterSensors, "water.wet", waterSensorHandler)
-    } else if ("Dry" in waterSensorEvents) {
-    	log("Subscribing to [dry] moisture sensor events.", "INFO")
-        subscribe(waterSensors, "water.dry", waterSensorHandler)
-    }
-    
-    players.each { it->
-    	log("Selected music players type = ${it.name} and label = ${it.label}.", "INFO")
-    }
-    
-    speech.each { it->
-    	log("Selected speech synthesizers type = ${it.name} and label = ${it.label}.", "INFO")
-    }
-    
-    log("Delay speech setting = ${delaySpeech}.", "INFO")
-    log("Speech delay set to ${speechDelayLength}.", "INFO")
-    
-    alarms.each { it->
-    	log("Selected alarms type = ${it.name} and label = ${it.label}.", "INFO")
-    }
-    
-    sirens.each { it->
-    	log("Selected sirens type = ${it.name} and label = ${it.label}.", "INFO")
-    }
+
+	if(sirens == null) {
+    	log("No sirens selected.", "INFO")
+        state.siren = false
+    } else {
+    	state.siren = true
+        sirens.each { it->
+            log("Selected sirens type = ${it.name} and label = ${it.label}.", "INFO")
+        }
+   }
     
     log("The sirens will play for ${sirenLength} seconds.", "INFO")
             
@@ -327,10 +375,10 @@ def waterSensorHandler(evt) {
     
     log("Event = ${evt.descriptionText}.", "DEBUG")
     
-    if (!isDuplicateCommand(state.lastEvent, ignoreFrequentEventsDuration)) {
+    /*if (!isDuplicateCommand(state.lastEvent, ignoreFrequentEventsDuration)) {
         state.lastEvent = new Date().time    
-	    playMusicTrack(musicTrack)
-    	playAlarmTrack(alarmTrack)
+	    playAlarmTrack(alarmTrack)
+        playMusicTrack(musicTrack)
         speak(evt.descriptionText)
         activateSirens()
         if(push) {
@@ -338,7 +386,8 @@ def waterSensorHandler(evt) {
         }
     } else {
     	log("Frequent Event: Ignoring", "DEBUG")
-    }
+    }*/
+    alert(evt.descriptionText)
 }
 
 def presenceHandler(evt) {
@@ -371,25 +420,27 @@ def contactHandler(evt) {
         return
     }
     
-    if(state.ignoreArrival && useArrivalWindow) {
+    /*if(state.ignoreArrival && useArrivalWindow) {
     	log("Within arrival window.", "INFO")
         return
-    }
+    }*/
     
-    log("Event = ${evt.descriptionText}.", "DEBUG")
+    log("Event = ${evt.descriptionText} --- ${state.lastEvent}.", "DEBUG")
     
-    if (!isDuplicateCommand(state.lastEvent, ignoreFrequentEventsDuration)) {
+	//def location = (user.city == null) ? user.state : user.city
+    
+    /*if (!isDuplicateCommand(state.lastEvent, ignoreFrequentEventsDuration)) {
         state.lastEvent = new Date().time    
-	    playMusicTrack(musicTrack)
-    	playAlarmTrack(alarmTrack)
-        speak(evt.descriptionText)
-        activateSirens()
-        if(push) {
-        	sendPushNotification(evt.descriptionText)
-        }
+	    if(state.alarm) { playAlarmTrack(alarmTrack) }
+        if(state.music) { playMusicTrack(musicTrack) }
+        if(state.talk) { speak(evt.descriptionText) }
+        if(state.siren) { activateSirens() }
+        if(push) {sendPushNotification(evt.descriptionText) }
     } else {
     	log("Frequent Event: Ignoring", "DEBUG")
-    }
+    }*/
+    
+    alert(evt.descriptionText)
 	log("End contactHandler().", "DEBUG")
 }
 
@@ -409,44 +460,120 @@ def motionHandler(evt) {
     }
     
     log("Event = ${evt.descriptionText}.", "DEBUG")
-    if (!isDuplicateCommand(state.lastEvent, ignoreFrequentEventsDuration)) {
+    /*if (!isDuplicateCommand(state.lastEvent, ignoreFrequentEventsDuration)) {
         state.lastEvent = new Date().time    
-	    playMusicTrack(musicTrack)
-    	playAlarmTrack(alarmTrack)
+	    playAlarmTrack(alarmTrack)
+        playMusicTrack(musicTrack)
         speak(evt.descriptionText)
         activateSirens()
     } else {
     	log("Frequent Event: Ignoring", "DEBUG")
-    }
+    }*/
+    alert(evt.descriptionText)
 	log("End motionHandler().", "DEBUG")
 }
 
-def playMusicTrack(track) {
+def alert(message) {
+	log("Begin alert(...)", "DEBUG")
+    
+    if(!isDuplicateCommand(state.lastEvent, ignoreFrequentEventsDuration)) {
+   		state.lastEvent = new Date().time
+        state.phrase = message
+        
+        log("Alert Message = ${message}.", "INFO")
+        if(state.alarm) { runIn(0, playAsyncAlarmTrack) }
+        if(state.music) { runIn(0, playAsyncMusicTrack) }
+        if(state.talk) { runIn(0, asyncSpeak) }
+        if(state.siren) { runIn(0, activateSirens) }
+        if(push) { runIn(0, asyncSendPushNotification) }
+        //runIn(0, playAsyncAlarmTrack)
+        //runIn(0, playAsyncMusicTrack)
+        //runIn(0, asynchSpeak)
+        //runIn(0, activateSirens)
+    }
+    
+	log("End alert(...)", "DEBUG")
+}
+
+def playAsyncMusicTrack() {
+	log("Being playAsyncMusicTrack()", "DEBUG")
+    
+    players.each { it->
+    	log("Playing music device ${it.label} with track ${state.musicTrack}.", "INFO")
+        it.playTrack(state.musicTrack)
+    }	
+        
+    //alarms?.playTrack(state.alarmMusic)
+    
+    log("Ending playAsyncMusicTrack()", "DEBUG")
+}
+
+/*def playMusicTrack(track) {
 	log("Begin playMusicTrack()", "DEBUG")
-    	players?.playTrack(track)
+    
+   	players?.playTrack(track)
+    
     log("End playMusicTrack()", "DEBUG")
+}*/
+
+def playAsyncAlarmTrack() {
+	log("Being playAsyncAlarmTrack()", "DEBUG")
+    	
+        alarms.each { it->
+        	log("Playing alarm ${it.label} with track ${state.alarmTrack}.", "INFO")
+            it.playTrackAtVolume(state.alarmTrack, state.alarmVolume)
+        }
+    
+    log("Ending playAsyncAlarmTrack()", "DEBUG")
 }
 
-def playAlarmTrack(track) {
+/*def playAlarmTrack(track) {
 	log("Begin playAlarmTrack()", "DEBUG")
-    	alarms?.playTrack(track)
+        alarms?.playTrack(track)
     log("End playAlarmTrack()", "DEBUG")
-}
+}*/
 
-def speak(phrase) {
-	log("Begin speak()", "DEBUG")
+def asyncSpeak() {
+	log("Begin speak() --- phrase == ${state.phrase}.", "DEBUG")
     	if(delaySpeech) {
-        	state.phrase = phrase
         	runIn(speechDelayLength, delayedSpeech)
         } else {
-        	speech?.speak(phrase)
+        	log("About to speak", "DEBUG")
+        	
+            speech.each { it->
+            	log("Speaking ${state.phrase} with ${it.label}.", "INFO")
+                speech.speak(state.phrase)
+            }
+            
+            //speech?.speak(state.phrase)
+            log("Just spoke", "DEBUG")
         }
     log("End speak()", "DEBUG")
 }
 
+/*def speak(phrase) {
+	log("Begin speak() --- phrase == ${phrase}.", "DEBUG")
+    	if(delaySpeech) {
+        	state.phrase = phrase
+        	runIn(speechDelayLength, delayedSpeech)
+        } else {
+        	log("About to speak", "DEBUG")
+        	speech?.speak(phrase)
+            log("Just spoke", "DEBUG")
+        }
+    log("End speak()", "DEBUG")
+}*/
+
 def activateSirens() {
 	log("Begin activateSirens()", "DEBUG")
-    sirens?.siren()
+    
+    sirens.each { it->
+    	log("Sounding siren ${it.label}.", "INFO")
+        it.siren()
+    }
+    
+    //sirens?.siren()
+    
     runIn(sirenLength, turnOffSiren)
     log("End activateSirens()", "DEBUG")
 }
@@ -455,9 +582,13 @@ private isDuplicateCommand(lastExecuted, allowedMil) {
     !lastExecuted ? false : (lastExecuted + allowedMil > new Date().time) 
 }
 
-def sendPushNotification(text) {
-	sendPush(text)
+def asyncSendPushNotification() {
+	sendPush(state.phrase)
 }
+
+/*def sendPushNotification(text) {
+	sendPush(text)
+}*/
 
 def setInTheMode(val) {
 	state.inTheMode = val
@@ -469,18 +600,34 @@ def inTheMode() {
 
 def turnOffSiren() {
 	log("Turning off sirens.", "DEBUG")
-	sirens?.off()
+	
+    sirens.each { it->
+    	log("Turning off siren ${it.label}.", "INFO")
+        it.off()
+    }
+    
+    //sirens?.off()
     log("Sirens off.", "DEBUG")
     runIn(2, makeSureSirenIsOff)
 }
 
 def makeSureSirenIsOff() {
 	log("Double checking sirens.", "DEBUG")
-	sirens?.off()
+	
+    sirens.each { it->
+    	log("Turning off siren ${it.label}.", "INFO")
+        it.off()
+    }
+    
+    //sirens?.off()
 }
 
 def delayedSpeech() {
-	speech?.speak(state.phrase)
+	log("delayed speak() --- phrase == ${state.phrase}.", "DEBUG")
+	speech.each { it->
+    	log("Speaking ${state.phrase} with ${it.label}.", "INFO")
+        speech.speak(state.phrase)
+    }
 }
 
 def endArrivalWindow() {
