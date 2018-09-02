@@ -1,3 +1,5 @@
+# This SmartApp is no longer supported.
+
 # ST-Home-Notify-v2
 
 ## Summary
